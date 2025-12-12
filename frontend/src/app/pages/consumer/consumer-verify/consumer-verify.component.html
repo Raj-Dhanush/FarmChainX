@@ -1,0 +1,30 @@
+<div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+  <h3 class="text-lg font-bold mb-4">Verify a Product</h3>
+
+  <!-- Manual input -->
+  <div class="flex gap-3 items-center">
+    <input
+      [(ngModel)]="codeInput"
+      type="text"
+      placeholder="Enter product code or scan QR"
+      class="flex-1 border p-3 rounded-lg"
+    />
+    <button (click)="verifyManual()" class="px-4 py-2 bg-green-600 text-white rounded-lg">
+      Verify
+    </button>
+    <button (click)="clear()" class="px-4 py-2 border rounded-lg">Clear</button>
+  </div>
+
+  <div *ngIf="verificationResult" class="mt-6 bg-gray-50 p-4 rounded-lg border">
+    <h4 class="font-semibold">{{ verificationResult.product }}</h4>
+    <p class="text-sm text-gray-600">
+      Status: <span class="font-medium">{{ verificationResult.status }}</span>
+    </p>
+    <p class="text-sm text-gray-600">Farmer: {{ verificationResult.farmer }}</p>
+    <p class="text-sm text-gray-600">Code: {{ verificationResult.code }}</p>
+  </div>
+
+  <div *ngIf="!verificationResult" class="mt-6 text-sm text-gray-500">
+    Recent scans and results will appear here.
+  </div>
+</div>

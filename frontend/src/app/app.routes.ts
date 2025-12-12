@@ -20,6 +20,8 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./components/verify-product/verify-product').then((m) => m.VerifyProduct),
   },
+
+  // User routes
   {
     path: 'dashboard',
     canActivate: [AuthGuard],
@@ -42,12 +44,49 @@ export const routes: Routes = [
     canActivate: [AuthGuard],
     loadComponent: () => import('./pages/my-products/my-products').then((m) => m.MyProducts),
   },
+
+  // CONSUMER ROUTES (correct exported class names)
   {
     path: 'consumer',
     canActivate: [AuthGuard],
     loadComponent: () =>
-      import('./pages/consumer/consumer.component').then((m) => m.ConsumerComponent),
+      import('./pages/consumer/consumer-layout/consumer-layout.component').then(
+        (m) => m.ConsumerLayoutComponent
+      ),
+    children: [
+      {
+        path: 'dashboard',
+        loadComponent: () =>
+          import('./pages/consumer/consumer-dashboard/consumer-dashboard.component').then(
+            (m) => m.ConsumerDashboardComponent
+          ),
+      },
+      {
+        path: 'verify',
+        loadComponent: () =>
+          import('./pages/consumer/consumer-verify/consumer-verify.component').then(
+            (m) => m.ConsumerVerifyComponent
+          ),
+      },
+      {
+        path: 'history',
+        loadComponent: () =>
+          import('./pages/consumer/consumer-history/consumer-history.component').then(
+            (m) => m.ConsumerHistoryComponent
+          ),
+      },
+      {
+        path: 'notifications',
+        loadComponent: () =>
+          import('./pages/consumer/consumer-notifications/consumer-notifications.component').then(
+            (m) => m.ConsumerNotificationsComponent
+          ),
+      },
+      { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
+    ],
   },
+
+  // Admin routes (unchanged)
   {
     path: 'admin',
     canActivate: [AuthGuard, AdminGuard],
@@ -74,5 +113,6 @@ export const routes: Routes = [
       { path: '', redirectTo: 'overview', pathMatch: 'full' },
     ],
   },
+
   { path: '**', redirectTo: '' },
 ];
