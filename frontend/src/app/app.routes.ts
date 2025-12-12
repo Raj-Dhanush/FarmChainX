@@ -13,8 +13,9 @@ export const routes: Routes = [
   },
   {
     path: 'register',
-    loadComponent: () => import('./pages/register/register').then((m) => m.Register),
+    loadComponent: () => import('./pages/register/register').then((m) => m.RegisterComponent),
   },
+
   {
     path: 'verify/:uuid',
     loadComponent: () =>
