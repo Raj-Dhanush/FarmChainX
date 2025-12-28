@@ -17,6 +17,8 @@ export class UploadProduct {
   harvestDate = '';             // yyyy-MM-dd
   gpsLocation = '';
   price: number | null = null;
+  quantity: number = 1000;  // Default quantity
+  quantityUnit: string = 'kg';  // Default unit
   imageFile: File | null = null;
   previewUrl: string | ArrayBuffer | null = null;
 
@@ -90,6 +92,8 @@ export class UploadProduct {
     formData.append('harvestDate', this.harvestDate);
     formData.append('gpsLocation', this.gpsLocation.trim());
     formData.append('price', this.price ? String(this.price) : '0');
+    formData.append('quantity', String(this.quantity));
+    formData.append('quantityUnit', this.quantityUnit);
     formData.append('image', this.imageFile);
 
     this.http.post<any>('/api/products/upload', formData)

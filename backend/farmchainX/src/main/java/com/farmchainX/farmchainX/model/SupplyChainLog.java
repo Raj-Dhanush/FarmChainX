@@ -39,6 +39,9 @@ public class SupplyChainLog {
     @Column(name = "reject_reason")
     private String rejectReason;
 
+    @Column(name = "quantity_transferred")
+    private Double quantityTransferred;
+
     public SupplyChainLog() {
     }
 
@@ -168,5 +171,13 @@ public class SupplyChainLog {
 
     public void setRejectReason(String rejectReason) {
         this.rejectReason = rejectReason;
+    }
+
+    public Double getQuantityTransferred() {
+        return quantityTransferred;
+    }
+
+    public void setQuantityTransferred(Double quantityTransferred) {
+        this.quantityTransferred = quantityTransferred;
     }
 }

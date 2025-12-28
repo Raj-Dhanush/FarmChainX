@@ -19,6 +19,11 @@ import java.nio.file.StandardOpenOption;
 import java.security.Principal;
 import java.util.List;
 import java.util.Map;
+import com.farmchainX.farmchainX.model.DispatchOffer;
+import com.farmchainX.farmchainX.repository.DispatchOfferRepository;
+import com.farmchainX.farmchainX.model.Product;
+import com.farmchainX.farmchainX.repository.ProductRepository;
+import com.farmchainX.farmchainX.repository.RetailerInventoryRepository;
 
 @RestController
 @RequestMapping("/api/track")
@@ -28,16 +33,25 @@ public class SupplyChainController {
         private final UserRepository userRepository;
         private final SupplyChainLogRepository supplyChainLogRepository;
         private final ProductService productService;
+        private final DispatchOfferRepository dispatchOfferRepository;
+        private final ProductRepository productRepository;
+        private final RetailerInventoryRepository retailerInventoryRepository;
 
         public SupplyChainController(
                         SupplyChainService supplyChainService,
                         UserRepository userRepository,
                         SupplyChainLogRepository supplyChainLogRepository,
-                        ProductService productService) {
+                        ProductService productService,
+                        DispatchOfferRepository dispatchOfferRepository,
+                        ProductRepository productRepository,
+                        RetailerInventoryRepository retailerInventoryRepository) {
                 this.supplyChainService = supplyChainService;
                 this.userRepository = userRepository;
                 this.supplyChainLogRepository = supplyChainLogRepository;
                 this.productService = productService;
+                this.dispatchOfferRepository = dispatchOfferRepository;
+                this.productRepository = productRepository;
+                this.retailerInventoryRepository = retailerInventoryRepository;
         }
 
         @PostMapping("/update-chain")
@@ -105,6 +119,19 @@ public class SupplyChainController {
                                                         productId, null, currentUser.getId(), location,
                                                         notes.isBlank() ? "Distributor received from farmer" : notes,
                                                         createdBy);
+
+                                        // NEW: Reduce farmer's product quantity on procurement
+                                        com.farmchainX.farmchainX.model.Product product = productRepository
+                                                        .findById(productId)
+                                                        .orElseThrow(() -> new RuntimeException("Product not found"));
+
+                                        if (product.getQuantity() != null && product.getQuantity() > 0) {
+                                                product.setQuantity(0.0); // Mark as fully procured (or reduce by
+                                                                          // specific amount)
+                                                product.setCurrentStatus("PROCURED");
+                                                productRepository.save(product);
+                                        }
+
                                         return ResponseEntity
                                                         .ok(Map.of("message", "You have taken possession from farmer"));
                                 }
@@ -285,6 +312,59 @@ public class SupplyChainController {
                                 .toList();
         }
 
+        @PostMapping("/broadcast-dispatch")
+        @PreAuthorize("hasRole('DISTRIBUTOR')")
+        @Transactional
+        public ResponseEntity<?> broadcastDispatch(@RequestBody Map<String, Object> payload, Principal principal) {
+                try {
+                        Long productId = Long.valueOf(String.valueOf(payload.get("productId")));
+                        String location = String.valueOf(payload.getOrDefault("location", "Distributor Warehouse"));
+                        String notes = payload.containsKey("notes") && payload.get("notes") != null
+                                        ? String.valueOf(payload.get("notes"))
+                                        : "Product dispatched to all retailers";
+
+                        User distributor = userRepository.findByEmail(principal.getName())
+                                        .orElseThrow(() -> new RuntimeException("Distributor not found"));
+
+                        // Verify distributor owns the product
+                        SupplyChainLog lastLog = supplyChainLogRepository
+                                        .findTopByProductIdOrderByTimestampDesc(productId)
+                                        .orElse(null);
+
+                        if (lastLog == null || !lastLog.getToUserId().equals(distributor.getId())
+                                        || !lastLog.isConfirmed()) {
+                                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                                                .body(Map.of("error",
+                                                                "You do not have confirmed possession of this product"));
+                        }
+
+                        // Check if there's already a pending offer for this product
+                        if (dispatchOfferRepository.existsByProductIdAndStatus(productId, "PENDING")) {
+                                return ResponseEntity.status(HttpStatus.CONFLICT)
+                                                .body(Map.of("error",
+                                                                "A pending dispatch offer already exists for this product"));
+                        }
+
+                        // Create the dispatch offer
+                        DispatchOffer offer = new DispatchOffer();
+                        offer.setProductId(productId);
+                        offer.setDistributorId(distributor.getId());
+                        offer.setLocation(location);
+                        offer.setNotes(notes);
+                        offer.setStatus("PENDING");
+
+                        dispatchOfferRepository.save(offer);
+
+                        return ResponseEntity.ok(Map.of(
+                                        "message", "Product dispatched to all retailers successfully",
+                                        "offerId", offer.getId()));
+
+                } catch (Exception e) {
+                        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                        .body(Map.of("error", e.getMessage()));
+                }
+        }
+
         @PreAuthorize("hasRole('DISTRIBUTOR')")
         @GetMapping("/dashboard/distributor")
         public ResponseEntity<?> getDistributorStats(Principal principal) {
@@ -386,6 +466,61 @@ public class SupplyChainController {
                 stats.put("chartData", Map.of("inventory", cropDistribution, "sales", salesHistory));
 
                 return ResponseEntity.ok(stats);
+        }
+
+        @PreAuthorize("hasRole('DISTRIBUTOR')")
+        @GetMapping("/dispatch-history")
+        public List<Map<String, Object>> getDispatchHistory(Principal principal) {
+                User distributor = userRepository.findByEmail(principal.getName())
+                                .orElseThrow(() -> new RuntimeException("Distributor not found"));
+
+                // Get all logs where this distributor dispatched products to retailers
+                // (fromUser = distributor, toUser = retailer)
+                List<SupplyChainLog> dispatchLogs = supplyChainLogRepository.findByFromUserId(distributor.getId())
+                                .stream()
+                                .filter(l -> l.getToUserId() != null && !l.getToUserId().equals(distributor.getId()))
+                                .collect(java.util.stream.Collectors.toList());
+
+                List<Map<String, Object>> history = new java.util.ArrayList<>();
+
+                for (SupplyChainLog log : dispatchLogs) {
+                        Map<String, Object> item = new java.util.HashMap<>();
+                        item.put("id", log.getId());
+                        item.put("productId", log.getProductId());
+                        item.put("timestamp", log.getTimestamp());
+                        item.put("createdAt", log.getTimestamp());
+                        item.put("location", log.getLocation());
+                        item.put("notes", log.getNotes());
+                        item.put("confirmed", log.isConfirmed());
+
+                        // Fetch product details
+                        try {
+                                com.farmchainX.farmchainX.model.Product p = productService
+                                                .getProductById(log.getProductId());
+                                if (p != null) {
+                                        item.put("cropName", p.getCropName());
+                                        item.put("value", p.getPrice() != null ? p.getPrice() : 0.0);
+                                        item.put("imagePath", p.getImagePath());
+                                }
+                        } catch (Exception e) {
+                                // Ignore if product not found
+                        }
+
+                        // Fetch retailer details
+                        try {
+                                User retailer = userRepository.findById(log.getToUserId()).orElse(null);
+                                if (retailer != null) {
+                                        item.put("retailerName", retailer.getName());
+                                        item.put("retailerEmail", retailer.getEmail());
+                                }
+                        } catch (Exception e) {
+                                // Ignore if retailer not found
+                        }
+
+                        history.add(item);
+                }
+
+                return history;
         }
 
         @PreAuthorize("hasRole('RETAILER')")
@@ -580,6 +715,34 @@ public class SupplyChainController {
                         purchaseLog.setHash(com.farmchainX.farmchainX.util.HashUtil.computeHash(purchaseLog, prevHash));
 
                         supplyChainLogRepository.save(purchaseLog);
+
+                        // NEW: Reduce RetailerInventory quantity on consumer purchase
+                        // Find the retailer who owns this product
+                        Long retailerId = lastLog != null ? lastLog.getToUserId() : null;
+                        if (retailerId != null) {
+                                List<com.farmchainX.farmchainX.model.RetailerInventory> inventoryList = retailerInventoryRepository
+                                                .findByRetailerIdAndProductId(retailerId, productId)
+                                                .map(java.util.Collections::singletonList)
+                                                .orElse(java.util.Collections.emptyList());
+
+                                if (!inventoryList.isEmpty()) {
+                                        com.farmchainX.farmchainX.model.RetailerInventory inventory = inventoryList
+                                                        .get(0);
+                                        Double currentQty = inventory.getQuantity();
+
+                                        if (currentQty != null && currentQty > 0) {
+                                                // Reduce quantity by 1 unit (or specific purchase quantity)
+                                                inventory.setQuantity(currentQty - 1.0);
+
+                                                // Update status if quantity reaches 0
+                                                if (inventory.getQuantity() <= 0) {
+                                                        inventory.setStatus("OUT_OF_STOCK");
+                                                }
+
+                                                retailerInventoryRepository.save(inventory);
+                                        }
+                                }
+                        }
 
                         return ResponseEntity.ok(Map.of("message", "Purchase successful"));
                 } catch (Exception e) {

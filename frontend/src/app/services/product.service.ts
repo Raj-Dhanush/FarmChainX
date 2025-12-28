@@ -90,4 +90,36 @@ export class ProductService {
     getNotifications(): Observable<any[]> {
         return this.http.get<any[]>(`${this.apiUrl}/notifications`);
     }
+
+    submitFeedback(productId: number, feedback: { rating: number, comment: string }): Observable<any> {
+        return this.http.post<any>(`${this.apiUrl}/products/${productId}/feedback`, feedback);
+    }
+
+    // Broadcast Dispatch Methods
+    broadcastDispatch(productId: number, location: string, notes?: string): Observable<any> {
+        return this.http.post<any>(`${this.apiUrl}/track/broadcast-dispatch`, {
+            productId,
+            location,
+            notes: notes || 'Product dispatched to all retailers'
+        });
+    }
+
+    getRetailerOffers(): Observable<any[]> {
+        return this.http.get<any[]>(`${this.apiUrl}/retailer/dispatch-offers`);
+    }
+
+    acceptOffer(offerId: number, location: string): Observable<any> {
+        return this.http.post<any>(`${this.apiUrl}/retailer/accept-offer/${offerId}`, {
+            location
+        });
+    }
+
+    rejectOffer(offerId: number): Observable<any> {
+        return this.http.post<any>(`${this.apiUrl}/retailer/reject-offer/${offerId}`, {});
+    }
+
+    // Get dispatch history for distributor
+    getDispatchHistory(): Observable<any[]> {
+        return this.http.get<any[]>(`${this.apiUrl}/track/dispatch-history`);
+    }
 }

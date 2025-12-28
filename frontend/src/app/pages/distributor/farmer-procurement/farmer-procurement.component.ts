@@ -2,17 +2,21 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule, DecimalPipe, DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { ProductService } from '../../../services/product.service';
+import { FindPipe } from '../../../pipes/find.pipe';
 
 @Component({
   selector: 'app-farmer-procurement',
   standalone: true,
-  imports: [CommonModule, DecimalPipe, DatePipe],
+  imports: [CommonModule, DecimalPipe, DatePipe, FindPipe],
   templateUrl: './farmer-procurement.component.html'
 })
 export class FarmerProcurementComponent implements OnInit {
   availableCrops: any[] = [];
   loading = true;
   buyingId: number | null = null;
+  confirmingId: number | null = null;
+  toastMessage: string = '';
+  toastType: 'success' | 'error' | '' = '';
 
   constructor(private http: HttpClient, private productService: ProductService) { }
 
@@ -34,25 +38,49 @@ export class FarmerProcurementComponent implements OnInit {
     });
   }
 
-  buyCrop(crop: any) {
-    if (confirm(`Confirm purchase of ${crop.cropName} for ₹${this.estimatePrice(crop)}?`)) {
-      this.buyingId = crop.id;
+  // Show confirmation for product
+  showConfirmation(crop: any) {
+    this.confirmingId = crop.id;
+  }
 
-      const location = "Distributor Warehouse (Initial)";
-      this.productService.pickupProduct(crop.id, location).subscribe({
-        next: (res) => {
-          alert(`✅ Successfully Acquired! \nOwnership of Batch #${crop.id} transferred to you.`);
-          // Refresh list to remove the item
-          this.loadMarketplace();
-          this.buyingId = null;
-        },
-        error: (err) => {
-          console.error(err);
-          alert("Failed to acquire product: " + (err.error?.error || err.message));
-          this.buyingId = null;
-        }
-      });
-    }
+  // Cancel confirmation
+  cancelPurchase() {
+    this.confirmingId = null;
+  }
+
+  // Confirm and proceed with purchase
+  confirmPurchase(crop: any) {
+    this.confirmingId = null;
+    this.buyingId = crop.id;
+
+    const location = "Distributor Warehouse (Initial)";
+    this.productService.pickupProduct(crop.id, location).subscribe({
+      next: (res) => {
+        this.showToast(`✅ Successfully Acquired! Ownership of Batch #${crop.id} transferred to you.`, 'success');
+        // Refresh list to remove the item
+        this.loadMarketplace();
+        this.buyingId = null;
+      },
+      error: (err) => {
+        console.error(err);
+        this.showToast("❌ Failed to acquire product: " + (err.error?.error || err.message), 'error');
+        this.buyingId = null;
+      }
+    });
+  }
+
+  // Legacy method for backward compatibility (direct purchase)
+  buyCrop(crop: any) {
+    this.showConfirmation(crop);
+  }
+
+  showToast(message: string, type: 'success' | 'error') {
+    this.toastMessage = message;
+    this.toastType = type;
+    setTimeout(() => {
+      this.toastMessage = '';
+      this.toastType = '';
+    }, 5000);
   }
 
   estimatePrice(crop: any): number {
@@ -70,5 +98,11 @@ export class FarmerProcurementComponent implements OnInit {
     if (g.includes('A') || g.includes('A+')) return 'bg-emerald-100 text-emerald-800';
     if (g.includes('B')) return 'bg-yellow-100 text-yellow-800';
     return 'bg-orange-100 text-orange-800';
+  }
+
+  // Helper method to get the confirming crop
+  getConfirmingCrop(): any {
+    if (this.confirmingId === null) return null;
+    return this.availableCrops.find(crop => crop.id === this.confirmingId);
   }
 }

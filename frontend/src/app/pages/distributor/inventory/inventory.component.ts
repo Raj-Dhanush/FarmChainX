@@ -1,29 +1,26 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule, DecimalPipe, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterModule, Router } from '@angular/router';
 import { ProductService } from '../../../services/product.service';
 
 @Component({
   selector: 'app-inventory',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterModule],
   templateUrl: './inventory.component.html',
 })
 export class InventoryComponent implements OnInit {
   inventoryItems: any[] = [];
-  retailers: any[] = [];
   totalValue = 0;
 
-  showDispatchModal = false;
-  selectedItem: any = null;
-  selectedRetailerId: number | null = null;
-  dispatchLocation = 'Distributor Warehouse';
-
-  constructor(private productService: ProductService) { }
+  constructor(
+    private productService: ProductService,
+    private router: Router
+  ) { }
 
   ngOnInit() {
     this.loadInventory();
-    this.loadRetailers();
   }
 
   loadInventory() {
@@ -31,10 +28,6 @@ export class InventoryComponent implements OnInit {
       this.inventoryItems = items || [];
       this.totalValue = this.inventoryItems.reduce((acc, item) => acc + (item.value || 0), 0);
     });
-  }
-
-  loadRetailers() {
-    this.productService.getRetailers().subscribe(r => this.retailers = r || []);
   }
 
   getGradeColor(grade: string): string {
@@ -51,30 +44,10 @@ export class InventoryComponent implements OnInit {
     return 'bg-gray-100 text-gray-800';
   }
 
-  openDispatch(item: any) {
-    this.selectedItem = item;
-    this.showDispatchModal = true;
-  }
-
-  closeModal() {
-    this.showDispatchModal = false;
-    this.selectedItem = null;
-    this.selectedRetailerId = null;
-  }
-
-  confirmDispatch() {
-    if (!this.selectedItem || !this.selectedRetailerId) return;
-
-    this.productService.handoverToRetailer(this.selectedItem.productId, this.selectedRetailerId, this.dispatchLocation)
-      .subscribe({
-        next: () => {
-          alert('✅ Dispatched successfully to retailer!');
-          this.closeModal();
-          this.loadInventory();
-        },
-        error: (err) => {
-          alert('Error: ' + err.error?.error || err.message);
-        }
-      });
+  goToDispatch(item: any) {
+    // Navigate to dispatch page with selected product data
+    this.router.navigate(['/distributor/dispatch'], {
+      state: { selectedProduct: item }
+    });
   }
 }

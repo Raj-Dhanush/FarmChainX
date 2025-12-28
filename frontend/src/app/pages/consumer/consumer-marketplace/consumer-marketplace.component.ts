@@ -84,8 +84,13 @@ export class ConsumerMarketplaceComponent implements OnInit {
     ) { }
 
     ngOnInit() {
-        this.productService.getMarketProducts().subscribe({
-            next: (data) => this.products.set(data || []),
+        this.productService.getConsumerMarketProducts().subscribe({
+            next: (data) => {
+                // Filter out products that are marked as Sold
+                // For retailer items, isSold might be undefined, so we default to false (available)
+                const available = (data || []).filter(p => !p.isSold && p.status !== 'Sold');
+                this.products.set(available);
+            },
             error: (err) => console.error('Market load error', err)
         });
     }

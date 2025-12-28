@@ -8,7 +8,9 @@ import java.util.stream.Collectors;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,8 +22,13 @@ import com.farmchainX.farmchainX.repository.OrderRepository;
 import com.farmchainX.farmchainX.repository.SupplyChainLogRepository;
 import com.farmchainX.farmchainX.repository.UserRepository;
 import com.farmchainX.farmchainX.repository.ProductRepository;
+import com.farmchainX.farmchainX.repository.DispatchOfferRepository;
+import com.farmchainX.farmchainX.repository.RetailerInventoryRepository;
 import com.farmchainX.farmchainX.model.SupplyChainLog;
 import com.farmchainX.farmchainX.model.Product;
+import com.farmchainX.farmchainX.model.DispatchOffer;
+import com.farmchainX.farmchainX.model.RetailerInventory;
+import com.farmchainX.farmchainX.util.HashUtil;
 
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -35,13 +42,19 @@ public class RetailerController {
     private final OrderRepository orderRepository;
     private final SupplyChainLogRepository supplyChainLogRepository;
     private final ProductRepository productRepository;
+    private final DispatchOfferRepository dispatchOfferRepository;
+    private final RetailerInventoryRepository retailerInventoryRepository;
 
     public RetailerController(UserRepository userRepository, OrderRepository orderRepository,
-            SupplyChainLogRepository supplyChainLogRepository, ProductRepository productRepository) {
+            SupplyChainLogRepository supplyChainLogRepository, ProductRepository productRepository,
+            DispatchOfferRepository dispatchOfferRepository,
+            RetailerInventoryRepository retailerInventoryRepository) {
         this.userRepository = userRepository;
         this.orderRepository = orderRepository;
         this.supplyChainLogRepository = supplyChainLogRepository;
         this.productRepository = productRepository;
+        this.dispatchOfferRepository = dispatchOfferRepository;
+        this.retailerInventoryRepository = retailerInventoryRepository;
     }
 
     @GetMapping("/dashboard-stats")
@@ -240,13 +253,53 @@ public class RetailerController {
     }
 
     @PostMapping("/sell")
+    @Transactional
     public ResponseEntity<?> sellProduct(@RequestBody Map<String, String> payload, Principal principal) {
         User user = userRepository.findByEmail(principal.getName()).orElseThrow();
-        String uuid = payload.get("productId");
+        String productIdStr = payload.get("productId");
 
-        Product product = productRepository.findByPublicUuid(uuid)
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+        // Try to find product by numeric ID first, then by UUID
+        Product product = null;
+        try {
+            // Try as numeric ID
+            Long productId = Long.parseLong(productIdStr);
+            product = productRepository.findById(productId).orElse(null);
+        } catch (NumberFormatException e) {
+            // Not a number, try as UUID
+            product = productRepository.findByPublicUuid(productIdStr).orElse(null);
+        }
 
+        if (product == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "Product not found"));
+        }
+
+        // Update RetailerInventory - reduce quantity when selling
+        try {
+            java.util.Optional<RetailerInventory> inventoryOpt = retailerInventoryRepository
+                    .findByRetailerIdAndProductId(user.getId(), product.getId());
+
+            if (inventoryOpt.isPresent()) {
+                RetailerInventory inventory = inventoryOpt.get();
+                Double currentQty = inventory.getQuantity();
+
+                if (currentQty != null && currentQty > 0) {
+                    // Reduce quantity by 1 unit
+                    inventory.setQuantity(currentQty - 1.0);
+
+                    // setQuantity automatically updates status based on quantity
+                    retailerInventoryRepository.save(inventory);
+                } else {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                            .body(Map.of("error", "Product is out of stock"));
+                }
+            }
+        } catch (Exception e) {
+            // Log error but continue with supply chain log creation
+            System.err.println("[Inventory Update Error] " + e.getMessage());
+        }
+
+        // Create supply chain log for sale to consumer
         SupplyChainLog log = new SupplyChainLog();
         log.setProductId(product.getId());
         log.setFromUserId(user.getId());
@@ -262,6 +315,171 @@ public class RetailerController {
         supplyChainLogRepository.save(log);
 
         return ResponseEntity.ok(Map.of("message", "Product sold successfully"));
+    }
+
+    @GetMapping("/dispatch-offers")
+    public ResponseEntity<?> getAvailableOffers(Principal principal) {
+        // Get all pending dispatch offers
+        List<DispatchOffer> pendingOffers = dispatchOfferRepository.findByStatusOrderByCreatedAtDesc("PENDING");
+
+        List<Map<String, Object>> offers = pendingOffers.stream().map(offer -> {
+            Map<String, Object> offerData = new HashMap<>();
+            offerData.put("offerId", offer.getId());
+            offerData.put("productId", offer.getProductId());
+            offerData.put("distributorId", offer.getDistributorId());
+            offerData.put("location", offer.getLocation());
+            offerData.put("notes", offer.getNotes());
+            offerData.put("createdAt", offer.getCreatedAt());
+            offerData.put("status", offer.getStatus());
+
+            // Fetch product details
+            try {
+                Product p = productRepository.findById(offer.getProductId()).orElse(null);
+                if (p != null) {
+                    offerData.put("cropName", p.getCropName());
+                    offerData.put("qualityGrade", p.getQualityGrade());
+                    offerData.put("price", p.getPrice());
+                    offerData.put("imagePath", p.getImagePath());
+                }
+            } catch (Exception e) {
+                // Ignore if product not found
+            }
+
+            // Fetch distributor details
+            try {
+                User distributor = userRepository.findById(offer.getDistributorId()).orElse(null);
+                if (distributor != null) {
+                    offerData.put("distributorName", distributor.getName());
+                    offerData.put("distributorEmail", distributor.getEmail());
+                }
+            } catch (Exception e) {
+                // Ignore if distributor not found
+            }
+
+            return offerData;
+        }).collect(Collectors.toList());
+
+        return ResponseEntity.ok(offers);
+    }
+
+    @PostMapping("/accept-offer/{offerId}")
+    @Transactional
+    public ResponseEntity<?> acceptOffer(@PathVariable Long offerId, @RequestBody Map<String, String> payload,
+            Principal principal) {
+        try {
+            User retailer = userRepository.findByEmail(principal.getName()).orElseThrow();
+            String location = payload.getOrDefault("location", "Retailer Warehouse");
+
+            // Find the offer
+            DispatchOffer offer = dispatchOfferRepository.findById(offerId)
+                    .orElseThrow(() -> new RuntimeException("Offer not found"));
+
+            // Check if still pending (first-come-first-served)
+            if (!"PENDING".equals(offer.getStatus())) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(Map.of("error", "This offer has already been accepted by another retailer"));
+            }
+
+            // Update offer status
+            offer.setStatus("ACCEPTED");
+            offer.setAcceptedBy(retailer.getId());
+            offer.setAcceptedAt(java.time.LocalDateTime.now());
+            dispatchOfferRepository.save(offer);
+
+            // Create supply chain log for handover
+            User distributor = userRepository.findById(offer.getDistributorId()).orElseThrow();
+
+            SupplyChainLog lastLog = supplyChainLogRepository
+                    .findTopByProductIdOrderByTimestampDesc(offer.getProductId())
+                    .orElse(null);
+
+            SupplyChainLog handoverLog = new SupplyChainLog();
+            handoverLog.setProductId(offer.getProductId());
+            handoverLog.setFromUserId(offer.getDistributorId());
+            handoverLog.setToUserId(retailer.getId());
+            handoverLog.setAction("HANDOVER");
+            handoverLog.setLocation(location);
+            handoverLog.setNotes("Accepted dispatch offer - " + offer.getNotes());
+            handoverLog.setCreatedBy(distributor.getName() + " (Distributor)");
+            handoverLog.setConfirmed(true); // Auto-confirm on accept
+            handoverLog.setConfirmedAt(java.time.LocalDateTime.now());
+            handoverLog.setConfirmedById(retailer.getId());
+            handoverLog.setTimestamp(java.time.LocalDateTime.now());
+
+            if (lastLog != null) {
+                handoverLog.setPrevHash(lastLog.getHash());
+                handoverLog.setHash(HashUtil.computeHash(handoverLog, lastLog.getHash()));
+            } else {
+                handoverLog.setPrevHash("");
+                handoverLog.setHash(HashUtil.computeHash(handoverLog, ""));
+            }
+
+            supplyChainLogRepository.save(handoverLog);
+
+            // Create or update RetailerInventory entry
+            Product product = productRepository.findById(offer.getProductId())
+                    .orElseThrow(() -> new RuntimeException("Product not found"));
+
+            RetailerInventory inventory = retailerInventoryRepository
+                    .findByRetailerIdAndProductId(retailer.getId(), offer.getProductId())
+                    .orElse(new RetailerInventory());
+
+            inventory.setRetailerId(retailer.getId());
+            inventory.setProductId(offer.getProductId());
+            inventory.setSourceDistributorId(offer.getDistributorId());
+            inventory.setPricePerUnit(product.getPrice() != null ? product.getPrice() * 1.25 : 100.0); // 25% markup
+            inventory.setReceivedDate(java.time.LocalDateTime.now());
+
+            // Set quantity - if already exists, add to it, otherwise set default
+            if (inventory.getQuantity() == null) {
+                inventory.setQuantity(100.0); // Default quantity in kg
+            } else {
+                inventory.setQuantity(inventory.getQuantity() + 100.0);
+            }
+
+            retailerInventoryRepository.save(inventory);
+
+            return ResponseEntity.ok(Map.of(
+                    "message", "Dispatch offer accepted successfully and added to inventory",
+                    "productId", offer.getProductId(),
+                    "offerId", offerId));
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/reject-offer/{offerId}")
+    @Transactional
+    public ResponseEntity<?> rejectOffer(@PathVariable Long offerId, Principal principal) {
+        try {
+            User retailer = userRepository.findByEmail(principal.getName()).orElseThrow();
+
+            // Find the offer
+            DispatchOffer offer = dispatchOfferRepository.findById(offerId)
+                    .orElseThrow(() -> new RuntimeException("Offer not found"));
+
+            // Check if still pending
+            if (!"PENDING".equals(offer.getStatus())) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(Map.of("error", "This offer is no longer pending"));
+            }
+
+            // Update offer status to REJECTED
+            offer.setStatus("REJECTED");
+            offer.setAcceptedBy(retailer.getId()); // Track who rejected it
+            offer.setAcceptedAt(java.time.LocalDateTime.now());
+            dispatchOfferRepository.save(offer);
+
+            return ResponseEntity.ok(Map.of(
+                    "message", "Dispatch offer rejected successfully",
+                    "offerId", offerId));
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", e.getMessage()));
+        }
     }
 
     @PostMapping("/orders/create")

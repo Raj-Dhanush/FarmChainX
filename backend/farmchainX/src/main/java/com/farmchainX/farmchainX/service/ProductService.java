@@ -306,6 +306,8 @@ public class ProductService {
                     map.put("confidenceScore", product.getConfidenceScore());
                     map.put("farmerName",
                             product.getFarmer() != null ? product.getFarmer().getName() : "Unknown Farmer");
+                    map.put("quantity", product.getQuantity() != null ? product.getQuantity() : 1000.0);
+                    map.put("quantityUnit", product.getQuantityUnit() != null ? product.getQuantityUnit() : "kg");
 
                     if (product.getAddress() != null && !product.getAddress().isBlank()) {
                         map.put("displayLocation", product.getAddress());
@@ -335,21 +337,33 @@ public class ProductService {
                         User owner = userRepository.findById(lastLog.getToUserId()).orElse(null);
                         if (owner != null
                                 && owner.getRoles().stream().anyMatch(r -> "ROLE_RETAILER".equals(r.getName()))) {
-                            // It is with a retailer!
-                            Map<String, Object> map = new HashMap<>();
-                            map.put("id", product.getId());
-                            map.put("cropName", product.getCropName());
-                            // Retailer markup? For now use base price or mock markup
-                            map.put("price", product.getPrice() != null ? product.getPrice() * 1.5 : 100);
-                            map.put("imagePath", product.getImagePath());
-                            map.put("harvestDate", product.getHarvestDate());
-                            map.put("gpsLocation", product.getGpsLocation());
-                            map.put("displayLocation", lastLog.getLocation()); // Retailer location
-                            map.put("qualityGrade", product.getQualityGrade());
-                            map.put("farmerName",
-                                    product.getFarmer() != null ? product.getFarmer().getName() : "Unknown");
-                            map.put("retailerName", owner.getName());
-                            return map;
+
+                            // Check if already sold to consumer
+                            boolean soldToConsumer = lastLog.getNotes() != null &&
+                                    lastLog.getNotes().contains("Sold to Consumer");
+
+                            // Only return if NOT sold
+                            if (!soldToConsumer) {
+                                Map<String, Object> map = new HashMap<>();
+                                map.put("id", product.getId());
+                                map.put("cropName", product.getCropName());
+                                // Retailer markup? For now use base price or mock markup
+                                map.put("price", product.getPrice() != null ? product.getPrice() * 1.5 : 100);
+                                map.put("imagePath", product.getImagePath());
+                                map.put("harvestDate", product.getHarvestDate());
+                                map.put("gpsLocation", product.getGpsLocation());
+                                map.put("displayLocation", lastLog.getLocation()); // Retailer location
+                                map.put("qualityGrade", product.getQualityGrade());
+                                map.put("farmerName",
+                                        product.getFarmer() != null ? product.getFarmer().getName() : "Unknown");
+                                map.put("retailerName", owner.getName());
+                                map.put("quantity", product.getQuantity() != null ? product.getQuantity() : 100.0);
+                                map.put("quantityUnit",
+                                        product.getQuantityUnit() != null ? product.getQuantityUnit() : "kg");
+                                map.put("isSold", false);
+                                map.put("status", "Available");
+                                return map;
+                            }
                         }
                     }
                     return null;

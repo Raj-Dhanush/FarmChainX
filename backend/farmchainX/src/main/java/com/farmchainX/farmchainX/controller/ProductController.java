@@ -29,11 +29,13 @@ import com.farmchainX.farmchainX.model.AIPrediction;
 import com.farmchainX.farmchainX.model.Product;
 import com.farmchainX.farmchainX.model.SupplyChainLog;
 import com.farmchainX.farmchainX.model.User;
+import com.farmchainX.farmchainX.model.RetailerInventory;
 import com.farmchainX.farmchainX.repository.AIPredictionRepository;
 import com.farmchainX.farmchainX.repository.FeedbackRepository;
 import com.farmchainX.farmchainX.repository.ProductRepository;
 import com.farmchainX.farmchainX.repository.SupplyChainLogRepository;
 import com.farmchainX.farmchainX.repository.UserRepository;
+import com.farmchainX.farmchainX.repository.RetailerInventoryRepository;
 import com.farmchainX.farmchainX.service.ProductService;
 import com.farmchainX.farmchainX.util.HashUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -49,6 +51,7 @@ public class ProductController {
     private final FeedbackRepository feedbackRepository;
     private final com.farmchainX.farmchainX.service.GroqAIService groqAIService;
     private final AIPredictionRepository aiPredictionRepository;
+    private final RetailerInventoryRepository retailerInventoryRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public ProductController(ProductService productService,
@@ -57,7 +60,8 @@ public class ProductController {
             SupplyChainLogRepository supplyChainLogRepository,
             FeedbackRepository feedbackRepository,
             com.farmchainX.farmchainX.service.GroqAIService groqAIService,
-            AIPredictionRepository aiPredictionRepository) {
+            AIPredictionRepository aiPredictionRepository,
+            RetailerInventoryRepository retailerInventoryRepository) {
         this.productService = productService;
         this.userRepository = userRepository;
         this.productRepository = productRepository;
@@ -65,6 +69,7 @@ public class ProductController {
         this.feedbackRepository = feedbackRepository;
         this.groqAIService = groqAIService;
         this.aiPredictionRepository = aiPredictionRepository;
+        this.retailerInventoryRepository = retailerInventoryRepository;
     }
 
     @PostMapping("/products/upload")
@@ -76,6 +81,8 @@ public class ProductController {
             @RequestParam String harvestDate,
             @RequestParam String gpsLocation,
             @RequestParam(required = false, defaultValue = "0.0") Double price,
+            @RequestParam(required = false, defaultValue = "1000.0") Double quantity,
+            @RequestParam(required = false, defaultValue = "kg") String quantityUnit,
             @RequestParam("image") MultipartFile imageFile,
             Principal principal) throws IOException {
 
@@ -120,6 +127,19 @@ public class ProductController {
             product.setQualityGrade(null);
             product.setConfidenceScore(null);
             product.setPrice(price);
+            product.setQuantity(quantity);
+            product.setQuantityUnit(quantityUnit);
+
+            // NEW: Auto-generate batch ID if not provided
+            product.setBatchId("BATCH-" + System.currentTimeMillis());
+
+            // NEW: Set initial status
+            product.setCurrentStatus("CREATED");
+
+            // NEW: Calculate expiry date (30 days from harvest for now, can be customized)
+            if (parsedDate != null) {
+                product.setExpiryDate(parsedDate.plusDays(30));
+            }
 
             Product saved = productService.saveProduct(product);
 
@@ -535,11 +555,53 @@ public class ProductController {
 
     @GetMapping("/products/consumer")
     public List<Map<String, Object>> getConsumerProducts() {
-        // Aggregate: Direct Farmer + Retailer
-        List<Map<String, Object>> market = productService.getMarketplaceProducts();
-        List<Map<String, Object>> retail = productService.getConsumerProducts();
-        market.addAll(retail);
-        return market;
+        // Fetch products from retailer inventory only (IN_STOCK status)
+        List<RetailerInventory> inventoryItems = retailerInventoryRepository.findByStatus("IN_STOCK");
+
+        return inventoryItems.stream().map(inventory -> {
+            Map<String, Object> item = new java.util.HashMap<>();
+
+            // Get product details
+            Product product = productRepository.findById(inventory.getProductId()).orElse(null);
+            if (product == null) {
+                return null;
+            }
+
+            // Get retailer details
+            User retailer = userRepository.findById(inventory.getRetailerId()).orElse(null);
+
+            // Product information
+            item.put("id", product.getId());
+            item.put("cropName", product.getCropName());
+            item.put("qualityGrade", product.getQualityGrade());
+            item.put("harvestDate", product.getHarvestDate());
+            item.put("gpsLocation", product.getGpsLocation());
+            item.put("displayLocation", product.getAddress());
+            item.put("imagePath", product.getImagePath());
+            item.put("publicUuid", product.getPublicUuid());
+
+            // Retailer inventory specific info
+            item.put("price", inventory.getPricePerUnit());
+            item.put("quantity", inventory.getQuantity());
+            item.put("inventoryId", inventory.getId());
+            item.put("status", inventory.getStatus());
+
+            // Retailer information
+            if (retailer != null) {
+                item.put("retailerId", retailer.getId());
+                item.put("retailerName", retailer.getName());
+                item.put("sellerName", retailer.getName());
+            }
+
+            // Farmer information
+            if (product.getFarmer() != null) {
+                item.put("farmerName", product.getFarmer().getName());
+            }
+
+            return item;
+        })
+                .filter(item -> item != null) // Filter out null items
+                .collect(java.util.stream.Collectors.toList());
     }
 
     @GetMapping("/notifications")

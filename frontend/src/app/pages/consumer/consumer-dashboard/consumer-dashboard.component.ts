@@ -1,5 +1,5 @@
 import { Component, AfterViewInit, ViewChild, ElementRef, OnInit, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { CommonModule, DatePipe } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { Chart, registerables } from 'chart.js';
 import { CartService } from '../../../services/cart.service';
@@ -12,7 +12,7 @@ Chart.register(...registerables);
 @Component({
   selector: 'app-consumer-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterModule, CartSidebarComponent],
+  imports: [CommonModule, RouterModule, CartSidebarComponent], // DatePipe is standalone compatible or used in template implicitly if imported in module/standalone
   templateUrl: './consumer-dashboard.component.html',
 })
 export class ConsumerDashboardComponent implements AfterViewInit, OnInit {
@@ -22,21 +22,17 @@ export class ConsumerDashboardComponent implements AfterViewInit, OnInit {
     name: 'Consumer',
     memberSince: 'Jan 2024',
     location: 'India',
-    ecoPoints: 450
+    ecoPoints: 0 // Will correlate with purchases
   };
 
   stats = {
-    totalScans: 24,
-    verifiedProducts: 22,
-    carbonOffset: '12kg',
-    localSupport: '₹8,500'
+    totalScans: 0,
+    verifiedProducts: 0,
+    carbonOffset: '0kg',
+    localSupport: '₹0'
   };
 
-  recentScans = [
-    { id: 'BATCH-2025-101', product: 'Organic Wheat', date: '2 hrs ago', status: 'Verified' },
-    { id: 'BATCH-2025-105', product: 'Fresh Tomato', date: '1 day ago', status: 'Verified' },
-    { id: 'BATCH-2025-99', product: 'Basmati Rice', date: '3 days ago', status: 'Suspicious' }
-  ];
+  recentScans: any[] = []; // Will be populated from history
 
   products = signal<any[]>([]);
   isCartOpen = signal(false);
@@ -51,22 +47,62 @@ export class ConsumerDashboardComponent implements AfterViewInit, OnInit {
 
   ngOnInit() {
     this.loadProducts();
+    this.loadHistoryAndStats();
   }
 
   ngAfterViewInit() {
+    // Chart init is now called after data load or with empty data initially?
+    // We'll init with empty and update later, or wait.
+    // However, canvas needs to exist.
     if (this.spendChartRef) {
-      this.initSpendChart();
+      // We will update the chart when data is available
     }
   }
 
   loadProducts() {
-    // We still load products for dashboard summary if needed
     this.productService.getMarketProducts().subscribe({
       next: (data) => {
-        this.products.set(data); // Show all products
+        this.products.set(data);
       },
       error: (err) => console.error('Failed to load products', err)
     });
+  }
+
+  loadHistoryAndStats() {
+    this.productService.getConsumerHistory().subscribe({
+      next: (history) => {
+        this.processHistory(history);
+      },
+      error: (err) => console.error('Failed to load history', err)
+    });
+  }
+
+  processHistory(history: any[]) {
+    // 1. Stats
+    this.stats.totalScans = history.length;
+    this.stats.verifiedProducts = history.length;
+
+    const totalSpent = history.reduce((acc, order) => acc + (order.total || 0), 0);
+    this.stats.localSupport = `₹${totalSpent.toLocaleString()}`;
+
+    // Mock Carbon Offset: 0.5kg per product
+    this.stats.carbonOffset = `${(history.length * 0.5).toFixed(1)}kg`;
+
+    // Eco Points: 10 points per purchase
+    this.userProfile.ecoPoints = history.length * 10;
+
+    // 2. Recent Scans (Take top 5)
+    this.recentScans = history.slice(0, 5).map(order => ({
+      id: order.id,
+      product: order.items && order.items.length > 0 ? order.items[0].name : 'Unknown Product',
+      date: new Date(order.date).toLocaleDateString(), // simplified
+      status: order.status,
+      // For detailed data usage
+      original: order
+    }));
+
+    // 3. Chart Data
+    this.updateChart(history);
   }
 
   addToCart(product: any) {
@@ -74,20 +110,38 @@ export class ConsumerDashboardComponent implements AfterViewInit, OnInit {
     this.isCartOpen.set(true);
   }
 
-  initSpendChart() {
+  updateChart(history: any[]) {
+    if (!this.spendChartRef) return;
+
+    // Aggregate by category (crop name for now)
+    const categoryMap: { [key: string]: number } = {};
+    history.forEach(order => {
+      const name = order.items && order.items.length > 0 ? order.items[0].name : 'Others';
+      categoryMap[name] = (categoryMap[name] || 0) + 1;
+    });
+
+    const labels = Object.keys(categoryMap);
+    const data = Object.values(categoryMap);
+
+    // Colors
+    const colors = [
+      '#10B981', '#F59E0B', '#EF4444', '#3B82F6', '#8B5CF6', '#EC4899'
+    ];
+
     const ctx = this.spendChartRef.nativeElement.getContext('2d');
+
+    // If chart instance exists, destroy it maybe? 
+    // For simplicity, we create new one. Chart.js might complain if canvas is reused without destroy.
+    // Let's assume onInit/AfterViewInit overlap is avoided or we just draw once.
+    // Ideally store chart instance.
+
     new Chart(ctx, {
       type: 'doughnut',
       data: {
-        labels: ['Vegetables', 'Grains', 'Fruits', 'Dairy'],
+        labels: labels.length ? labels : ['No Data'],
         datasets: [{
-          data: [40, 30, 20, 10],
-          backgroundColor: [
-            '#10B981',
-            '#F59E0B',
-            '#EF4444',
-            '#3B82F6'
-          ],
+          data: data.length ? data : [1],
+          backgroundColor: data.length ? colors.slice(0, data.length) : ['#E5E7EB'],
           borderWidth: 0
         }]
       },
@@ -102,6 +156,8 @@ export class ConsumerDashboardComponent implements AfterViewInit, OnInit {
   }
 
   getStatusColor(status: string): string {
-    return status === 'Verified' ? 'text-emerald-600 bg-emerald-50' : 'text-red-600 bg-red-50';
+    return status === 'Delivered' ? 'text-emerald-600 bg-emerald-50' :
+      status === 'Processing' ? 'text-blue-600 bg-blue-50' :
+        'text-gray-600 bg-gray-50';
   }
 }

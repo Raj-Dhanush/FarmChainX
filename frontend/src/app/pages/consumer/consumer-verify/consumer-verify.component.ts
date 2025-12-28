@@ -2,15 +2,15 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ProductService } from '../../../services/product.service';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 
 @Component({
-  selector: 'app-consumer-verify',
+  selector: 'app-consumer-product-verify-page',
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './consumer-verify.component.html',
 })
-export class ConsumerVerifyComponent implements OnInit {
+export class ConsumerProductVerifyPage implements OnInit {
   codeInput: string = '';
   loading = false;
   verificationResult: any = null;
@@ -29,7 +29,8 @@ export class ConsumerVerifyComponent implements OnInit {
 
   constructor(
     private productService: ProductService,
-    private route: ActivatedRoute
+    private route: ActivatedRoute,
+    private router: Router
   ) { }
 
   ngOnInit() {
@@ -153,12 +154,26 @@ export class ConsumerVerifyComponent implements OnInit {
   }
 
   submitFeedback() {
-    if (!this.feedbackText && this.rating === 0) return;
-    // Mock API call
-    setTimeout(() => {
-      this.feedbackSubmitted = true;
-      alert('Thank you for your feedback! It helps improve the supply chain.');
-    }, 1000);
+    if ((!this.feedbackText && this.rating === 0) || !this.productData) return;
+
+    const feedback = {
+      rating: this.rating,
+      comment: this.feedbackText
+    };
+
+    if (this.productData.productId) {
+      this.productService.submitFeedback(this.productData.productId, feedback).subscribe({
+        next: () => {
+          this.feedbackSubmitted = true;
+        },
+        error: (err) => {
+          console.error(err);
+          alert('Failed to submit feedback. You might have already submitted one.');
+        }
+      });
+    } else {
+      alert('Product ID missing, cannot submit feedback.');
+    }
   }
 
   setRating(r: number) {
@@ -166,7 +181,8 @@ export class ConsumerVerifyComponent implements OnInit {
   }
 
   scanQR(): void {
-    alert('Camera permission required for QR scanning. Please enter UUID manually for this demo.');
+    // Redirect to the scanner page
+    this.router.navigate(['/scanner']);
   }
 
   clear(): void {

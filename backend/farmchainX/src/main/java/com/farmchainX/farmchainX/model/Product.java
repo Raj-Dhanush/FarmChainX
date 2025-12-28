@@ -15,6 +15,8 @@ public class Product {
 	private String soilType;
 	private String pesticides;
 	private LocalDate harvestDate;
+	private LocalDate expiryDate; // NEW: Expiry date for perishable goods
+	private String batchId; // NEW: Batch/Lot ID for traceability
 	private String gpsLocation;
 	private String imagePath;
 	private String qualityGrade;
@@ -22,6 +24,12 @@ public class Product {
 	private String qrCodePath;
 	private Double price;
 	private String address;
+	private Double quantity;
+	private String quantityUnit;
+
+	// NEW: Product lifecycle status
+	// CREATED, PROCURED, IN_DISTRIBUTOR_STOCK, DISPATCHED, IN_RETAILER_STOCK, SOLD
+	private String currentStatus;
 
 	@Column(name = "public_uuid", unique = true, length = 36)
 	private String publicUuid;
@@ -146,5 +154,48 @@ public class Product {
 
 	public void setAddress(String address) {
 		this.address = address;
+	}
+
+	public Double getQuantity() {
+		return quantity;
+	}
+
+	public void setQuantity(Double quantity) {
+		this.quantity = quantity;
+	}
+
+	public String getQuantityUnit() {
+		return quantityUnit;
+	}
+
+	public void setQuantityUnit(String quantityUnit) {
+		this.quantityUnit = quantityUnit;
+	}
+
+	// NEW: Getters and Setters for expiryDate
+	public LocalDate getExpiryDate() {
+		return expiryDate;
+	}
+
+	public void setExpiryDate(LocalDate expiryDate) {
+		this.expiryDate = expiryDate;
+	}
+
+	// NEW: Getters and Setters for batchId
+	public String getBatchId() {
+		return batchId;
+	}
+
+	public void setBatchId(String batchId) {
+		this.batchId = batchId;
+	}
+
+	// NEW: Getters and Setters for currentStatus
+	public String getCurrentStatus() {
+		return currentStatus;
+	}
+
+	public void setCurrentStatus(String currentStatus) {
+		this.currentStatus = currentStatus;
 	}
 }

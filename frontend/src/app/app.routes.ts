@@ -85,10 +85,10 @@ export const routes: Routes = [
           ),
       },
       {
-        path: 'verify',
+        path: 'retailers-inventory',
         loadComponent: () =>
-          import('./pages/consumer/consumer-verify/consumer-verify.component').then(
-            (m) => m.ConsumerVerifyComponent
+          import('./pages/consumer/retailers-inventory/retailers-inventory').then(
+            (m) => m.RetailersInventory
           ),
       },
       {
@@ -203,6 +203,24 @@ export const routes: Routes = [
             (m) => m.InventoryComponent
           ),
       },
+
+      // Dispatch
+      {
+        path: 'dispatch',
+        loadComponent: () =>
+          import('./pages/distributor/dispatch/dispatch.component').then(
+            (m) => m.DispatchComponent
+          ),
+      },
+
+      // Retailer Selection
+      {
+        path: 'retailer-selection',
+        loadComponent: () =>
+          import('./pages/distributor/retailer-selection/retailer-selection.component').then(
+            (m) => m.RetailerSelectionComponent
+          ),
+      },
     ],
   },
 
@@ -236,6 +254,13 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'dispatched-products',
+        loadComponent: () =>
+          import('./pages/retailer/retailer-dispatched-products/retailer-dispatched-products.component').then(
+            (m) => m.RetailerDispatchedProductsComponent
+          ),
+      },
+      {
         path: 'orders',
         loadComponent: () =>
           import('./pages/retailer/retailer-orders/retailer-orders.component').then(
@@ -247,13 +272,6 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./pages/retailer/retailer-shipments/retailer-shipments.component').then(
             (m) => m.RetailerShipmentsComponent
-          ),
-      },
-      {
-        path: 'provenance',
-        loadComponent: () =>
-          import('./pages/retailer/provenance-viewer/provenance-viewer.component').then(
-            (m) => m.ProvenanceViewerComponent
           ),
       },
       {
