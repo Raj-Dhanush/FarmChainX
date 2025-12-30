@@ -28,7 +28,8 @@ export class FarmerProcurementComponent implements OnInit {
     this.loading = true;
     this.productService.getMarketProducts().subscribe({
       next: (res) => {
-        this.availableCrops = res || [];
+        // Filter out sold-out products - only show available products
+        this.availableCrops = (res || []).filter(crop => !crop.isSold);
         this.loading = false;
       },
       error: (err) => {

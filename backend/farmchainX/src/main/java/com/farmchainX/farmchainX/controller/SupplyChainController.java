@@ -186,6 +186,59 @@ public class SupplyChainController {
 
                                 supplyChainService.confirmReceipt(productId, currentUser.getId(), location, notes,
                                                 createdBy);
+
+                                // NEW: Create or update RetailerInventory when confirming receipt
+                                try {
+                                        com.farmchainX.farmchainX.model.Product product = productRepository
+                                                        .findById(productId)
+                                                        .orElse(null);
+
+                                        if (product != null) {
+                                                // Check if inventory record already exists
+                                                java.util.Optional<com.farmchainX.farmchainX.model.RetailerInventory> existingInventory = retailerInventoryRepository
+                                                                .findByRetailerIdAndProductId(
+                                                                                currentUser.getId(), productId);
+
+                                                com.farmchainX.farmchainX.model.RetailerInventory inventory;
+
+                                                if (existingInventory.isPresent()) {
+                                                        // Update existing inventory
+                                                        inventory = existingInventory.get();
+                                                        Double currentQty = inventory.getQuantity() != null
+                                                                        ? inventory.getQuantity()
+                                                                        : 0.0;
+                                                        inventory.setQuantity(currentQty + 100.0); // Add 100kg
+                                                                                                   // (default)
+                                                } else {
+                                                        // Create new inventory record
+                                                        inventory = new com.farmchainX.farmchainX.model.RetailerInventory();
+                                                        inventory.setRetailerId(currentUser.getId());
+                                                        inventory.setProductId(productId);
+                                                        inventory.setQuantity(100.0); // Default 100kg
+                                                        inventory.setSourceDistributorId(lastLog.getFromUserId());
+                                                        inventory.setReceivedDate(java.time.LocalDateTime.now());
+                                                }
+
+                                                // Set price with markup
+                                                Double basePrice = product.getPrice() != null ? product.getPrice()
+                                                                : 100.0;
+                                                inventory.setPricePerUnit(basePrice * 1.25); // 25% markup
+                                                inventory.setStatus("IN_STOCK");
+                                                inventory.setLastUpdated(java.time.LocalDateTime.now());
+
+                                                retailerInventoryRepository.save(inventory);
+                                                System.out.println(
+                                                                "[Retailer Confirmation] Created/updated inventory for product "
+                                                                                +
+                                                                                productId + " for retailer "
+                                                                                + currentUser.getId());
+                                        }
+                                } catch (Exception e) {
+                                        // Log error but don't fail the confirmation
+                                        System.err.println("[Retailer Confirmation] Error creating inventory: "
+                                                        + e.getMessage());
+                                }
+
                                 return ResponseEntity.ok(Map.of("message", "Receipt confirmed successfully"));
                         }
 
@@ -675,7 +728,7 @@ public class SupplyChainController {
         }
 
         @PostMapping("/purchase")
-        @PreAuthorize("hasRole('CONSUMER')")
+        @PreAuthorize("hasAnyRole('CONSUMER')")
         @Transactional
         public ResponseEntity<?> purchaseProduct(@RequestBody Map<String, Object> payload, Principal principal) {
                 try {
@@ -689,21 +742,53 @@ public class SupplyChainController {
                                         .findTopByProductIdOrderByTimestampDesc(productId)
                                         .orElse(null);
 
-                        // Check if already sold to a consumer
-                        if (lastLog != null && lastLog.getNotes() != null
-                                        && lastLog.getNotes().contains("Sold to Consumer")) {
-                                return ResponseEntity.status(HttpStatus.CONFLICT)
-                                                .body(Map.of("error", "Product already sold"));
+                        // Determine the source of the product (farmer or retailer)
+                        Long fromUserId = lastLog != null ? lastLog.getToUserId() : null;
+                        boolean isFromRetailer = false;
+
+                        // Check if this product is in retailer inventory
+                        if (fromUserId != null) {
+                                User fromUser = userRepository.findById(fromUserId).orElse(null);
+                                if (fromUser != null) {
+                                        isFromRetailer = fromUser.getRoles().stream()
+                                                        .anyMatch(r -> "ROLE_RETAILER".equals(r.getName()));
+                                }
+                        }
+
+                        // Check product availability based on source
+                        if (isFromRetailer && fromUserId != null) {
+                                // For retailer products, check RetailerInventory
+                                java.util.Optional<com.farmchainX.farmchainX.model.RetailerInventory> inventoryOpt = retailerInventoryRepository
+                                                .findByRetailerIdAndProductId(fromUserId, productId);
+
+                                if (!inventoryOpt.isPresent()) {
+                                        return ResponseEntity.status(HttpStatus.CONFLICT)
+                                                        .body(Map.of("error",
+                                                                        "Product not available in retailer inventory"));
+                                }
+
+                                com.farmchainX.farmchainX.model.RetailerInventory inventory = inventoryOpt.get();
+                                if (inventory.getQuantity() == null || inventory.getQuantity() <= 0) {
+                                        return ResponseEntity.status(HttpStatus.CONFLICT)
+                                                        .body(Map.of("error", "Product is out of stock"));
+                                }
+                        } else {
+                                // For farmer products, check supply chain log
+                                if (lastLog != null && lastLog.getNotes() != null
+                                                && lastLog.getNotes().contains("Sold to Consumer")) {
+                                        return ResponseEntity.status(HttpStatus.CONFLICT)
+                                                        .body(Map.of("error", "Product already sold"));
+                                }
                         }
 
                         // Create Purchase Log
                         SupplyChainLog purchaseLog = new SupplyChainLog();
                         purchaseLog.setProductId(productId);
-                        purchaseLog.setFromUserId(lastLog != null ? lastLog.getToUserId() : null); // From whoever had
-                                                                                                   // it last
+                        purchaseLog.setFromUserId(fromUserId);
                         purchaseLog.setToUserId(consumer.getId());
                         purchaseLog.setLocation(location);
-                        purchaseLog.setNotes("Sold to Consumer " + consumer.getName());
+                        purchaseLog.setNotes("Sold to Consumer " + consumer.getName() +
+                                        (isFromRetailer ? " (via Retailer)" : " (Direct from Farmer)"));
                         purchaseLog.setCreatedBy(consumer.getEmail());
                         purchaseLog.setConfirmed(true);
                         purchaseLog.setConfirmedAt(java.time.LocalDateTime.now());
@@ -716,43 +801,58 @@ public class SupplyChainController {
 
                         supplyChainLogRepository.save(purchaseLog);
 
-                        // NEW: Reduce RetailerInventory quantity on consumer purchase
-                        // Find the retailer who owns this product
-                        Long retailerId = lastLog != null ? lastLog.getToUserId() : null;
-                        if (retailerId != null) {
-                                List<com.farmchainX.farmchainX.model.RetailerInventory> inventoryList = retailerInventoryRepository
-                                                .findByRetailerIdAndProductId(retailerId, productId)
-                                                .map(java.util.Collections::singletonList)
-                                                .orElse(java.util.Collections.emptyList());
+                        // OPTIONAL: Reduce RetailerInventory quantity if purchasing from retailer
+                        // This is non-blocking - if inventory record doesn't exist, purchase still
+                        // succeeds
+                        if (isFromRetailer && fromUserId != null) {
+                                try {
+                                        java.util.Optional<com.farmchainX.farmchainX.model.RetailerInventory> inventoryOpt = retailerInventoryRepository
+                                                        .findByRetailerIdAndProductId(fromUserId, productId);
 
-                                if (!inventoryList.isEmpty()) {
-                                        com.farmchainX.farmchainX.model.RetailerInventory inventory = inventoryList
-                                                        .get(0);
-                                        Double currentQty = inventory.getQuantity();
+                                        if (inventoryOpt.isPresent()) {
+                                                com.farmchainX.farmchainX.model.RetailerInventory inventory = inventoryOpt
+                                                                .get();
+                                                Double currentQty = inventory.getQuantity();
 
-                                        if (currentQty != null && currentQty > 0) {
-                                                // Reduce quantity by 1 unit (or specific purchase quantity)
-                                                inventory.setQuantity(currentQty - 1.0);
+                                                if (currentQty != null && currentQty > 0) {
+                                                        // Reduce quantity by 1 unit (or specific purchase quantity)
+                                                        inventory.setQuantity(currentQty - 1.0);
 
-                                                // Update status if quantity reaches 0
-                                                if (inventory.getQuantity() <= 0) {
-                                                        inventory.setStatus("OUT_OF_STOCK");
+                                                        // Update status if quantity reaches 0
+                                                        if (inventory.getQuantity() <= 0) {
+                                                                inventory.setStatus("OUT_OF_STOCK");
+                                                        }
+
+                                                        retailerInventoryRepository.save(inventory);
+                                                        System.out.println(
+                                                                        "[Purchase] Reduced retailer inventory for product "
+                                                                                        + productId);
                                                 }
-
-                                                retailerInventoryRepository.save(inventory);
+                                        } else {
+                                                // Inventory record doesn't exist - log but don't fail the purchase
+                                                System.out.println("[Purchase] No inventory record found for retailer "
+                                                                + fromUserId +
+                                                                " and product " + productId
+                                                                + " - purchase still successful");
                                         }
+                                } catch (Exception e) {
+                                        // Log error but don't fail the purchase
+                                        System.err.println("[Purchase] Error updating inventory: " + e.getMessage());
                                 }
                         }
 
-                        return ResponseEntity.ok(Map.of("message", "Purchase successful"));
+                        return ResponseEntity.ok(Map.of(
+                                        "message", "Purchase successful",
+                                        "source", isFromRetailer ? "retailer" : "farmer"));
                 } catch (Exception e) {
+                        e.printStackTrace();
                         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                                        .body(Map.of("error", e.getMessage()));
+                                        .body(Map.of("error", "Purchase failed: " + e.getMessage()));
                 }
         }
 
         @GetMapping("/consumer/history")
-        @PreAuthorize("hasRole('CONSUMER')")
+        @PreAuthorize("hasAnyRole('CONSUMER')")
         public List<Map<String, Object>> getConsumerHistory(Principal principal) {
                 User consumer = userRepository.findByEmail(principal.getName())
                                 .orElseThrow(() -> new RuntimeException("User not found"));

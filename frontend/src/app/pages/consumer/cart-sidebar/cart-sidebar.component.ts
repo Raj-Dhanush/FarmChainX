@@ -157,7 +157,9 @@ export class CartSidebarComponent {
       },
       error: (err) => {
         console.error('Checkout failed', err);
-        alert('Some items could not be purchased. They might be out of stock.');
+        console.error('Error details:', err.error);
+        const errorMsg = err.error?.error || err.message || 'Some items could not be purchased. They might be out of stock.';
+        alert(`Purchase failed: ${errorMsg}`);
         this.isProcessing = false;
       }
     });

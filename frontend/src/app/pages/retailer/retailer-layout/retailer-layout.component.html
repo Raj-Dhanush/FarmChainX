@@ -1,8 +1,8 @@
 <!-- src/app/pages/retailer/retailer-layout/retailer-layout.component.html -->
 <div class="flex h-screen bg-slate-100 overflow-hidden">
   <!-- Retailer Sidebar (desktop) -->
-  <aside class="w-80 bg-white/5 backdrop-blur-lg border-r border-white/5 flex flex-col hidden lg:flex">
-    <div class="p-6 border-b border-white/6 flex items-center gap-4">
+  <aside class="w-70 bg-blue-900 border-r border-white/10 flex flex-col hidden lg:flex text-white">
+    <div class="p-6 border-b border-white/10 flex items-center gap-4">
       <!-- Attractive logo: gradient circle + leaf SVG -->
       <div
         class="w-16 h-16 rounded-full flex items-center justify-center bg-gradient-to-br from-emerald-400 to-indigo-600 shadow-lg">
@@ -14,30 +14,30 @@
       </div>
 
       <div>
-        <div class="text-lg md:text-xl font-extrabold text-slate-900 leading-tight">
-          FarmChainX <span class="text-emerald-600">Retail</span>
+        <div class="text-lg md:text-xl font-extrabold text-white leading-tight">
+          FarmChainX <span class="text-emerald-400">Retail</span>
         </div>
-        <div class="text-xs md:text-sm text-slate-500 mt-1">GreenStore • Jaipur</div>
+        <div class="text-xs md:text-sm text-yellow-500 mt-1">GreenStore • Jaipur</div>
       </div>
     </div>
 
     <div class="px-4 py-6 flex-1 overflow-y-auto">
       <!-- profile small -->
-      <div class="flex items-center gap-3 px-2 py-3 rounded-lg hover:bg-slate-50/30 mb-5">
+      <!-- <div class="flex items-center gap-3 px-2 py-3 rounded-lg mb-5">
         <div
           class="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-400 to-emerald-400 text-white flex items-center justify-center font-bold text-lg">
           {{ retailerInitials }}
         </div>
         <div>
-          <div class="text-sm md:text-base font-semibold text-slate-900">{{ retailerName }}</div>
-          <div class="text-xs md:text-sm text-slate-500">Retailer</div>
+          <div class="text-sm md:text-base font-semibold text-white">{{ retailerName }}</div>
+          <div class="text-xs md:text-sm text-slate-300">Retailer</div>
         </div>
-      </div>
+      </div> -->
 
       <nav class="space-y-2">
-        <a routerLink="/retailer/dashboard" routerLinkActive="bg-indigo-600 text-white"
+        <a routerLink="/retailer/dashboard" routerLinkActive="bg-emerald-600 text-white shadow-lg shadow-emerald-500/20"
           [routerLinkActiveOptions]="{ exact: true }"
-          class="flex items-center justify-between gap-3 px-3 py-3 rounded-lg transition text-base md:text-lg font-medium"
+          class="flex items-center justify-between gap-3 px-3 py-3 rounded-xl transition-all duration-200 text-slate-300 text-base md:text-lg font-medium"
           aria-current="page">
           <div class="flex items-center gap-3">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -50,9 +50,9 @@
             }}</span> -->
         </a>
 
-        <a routerLink="/retailer/inventory" routerLinkActive="bg-indigo-600 text-white"
+        <a routerLink="/retailer/inventory" routerLinkActive="bg-emerald-600 text-white shadow-lg shadow-emerald-500/20"
           [routerLinkActiveOptions]="{ exact: true }"
-          class="flex items-center justify-between gap-3 px-3 py-3 rounded-lg transition text-base md:text-lg font-medium">
+          class="flex items-center justify-between gap-3 px-3 py-3 rounded-xl transition-all duration-200 text-slate-300 text-base md:text-lg font-medium">
           <div class="flex items-center gap-3">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -65,9 +65,10 @@
             }}</span> -->
         </a>
 
-        <a routerLink="/retailer/dispatched-products" routerLinkActive="bg-indigo-600 text-white"
+        <a routerLink="/retailer/dispatched-products"
+          routerLinkActive="bg-emerald-600 text-white shadow-lg shadow-emerald-500/20"
           [routerLinkActiveOptions]="{ exact: true }"
-          class="flex items-center justify-between gap-3 px-3 py-3 rounded-lg transition text-base md:text-lg font-medium">
+          class="flex items-center justify-between gap-3 px-3 py-3 rounded-xl transition-all duration-200 text-slate-300 text-base md:text-lg font-medium">
           <div class="flex items-center gap-3">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -77,9 +78,9 @@
           </div>
         </a>
 
-        <a routerLink="/retailer/orders" routerLinkActive="bg-indigo-600 text-white"
+        <a routerLink="/retailer/orders" routerLinkActive="bg-emerald-600 text-white shadow-lg shadow-emerald-500/20"
           [routerLinkActiveOptions]="{ exact: true }"
-          class="flex items-center justify-between gap-3 px-3 py-3 rounded-lg transition text-base md:text-lg font-medium">
+          class="flex items-center justify-between gap-3 px-3 py-3 rounded-xl transition-all duration-200 text-slate-300 text-base md:text-lg font-medium">
           <div class="flex items-center gap-3">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18" />
@@ -91,9 +92,9 @@
             }}</span> -->
         </a>
 
-        <a routerLink="/retailer/shipments" routerLinkActive="bg-indigo-600 text-white"
+        <a routerLink="/retailer/shipments" routerLinkActive="bg-emerald-600 text-white shadow-lg shadow-emerald-500/20"
           [routerLinkActiveOptions]="{ exact: true }"
-          class="flex items-center justify-between gap-3 px-3 py-3 rounded-lg transition text-base md:text-lg font-medium">
+          class="flex items-center justify-between gap-3 px-3 py-3 rounded-xl transition-all duration-200 text-slate-300 text-base md:text-lg font-medium">
           <div class="flex items-center gap-3">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h13l4 8H6z" />
@@ -105,10 +106,10 @@
             }}</span> -->
         </a>
 
-        <div class="border-t border-white/6 mt-4 pt-4"></div>
+        <div class="border-t border-white/10 mt-4 pt-4"></div>
 
         <a routerLink="/dashboard"
-          class="flex items-center gap-3 px-3 py-3 rounded-lg transition text-sm md:text-base font-medium text-slate-600">
+          class="flex items-center gap-3 px-3 py-3 rounded-lg transition-colors text-sm md:text-base font-medium text-slate-400">
           <svg class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3M3 11h18" />
           </svg>
@@ -117,7 +118,7 @@
       </nav>
     </div>
 
-    <div class="px-4 py-4 border-t border-white/6">
+    <div class="px-4 py-4 border-t border-white/10">
       <button (click)="createPO()"
         class="w-full px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm md:text-base font-semibold">
         + Create PO
