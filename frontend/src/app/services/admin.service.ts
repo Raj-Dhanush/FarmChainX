@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../environments/environment';
 
 export interface AdminOverview {
   totalUsers: number;
@@ -37,7 +38,7 @@ export interface UserDto {
 })
 export class AdminService {
 
-  private baseUrl = '/api/admin';
+  private baseUrl = `${environment.apiUrl}/admin`;
 
   constructor(private http: HttpClient) { }
 

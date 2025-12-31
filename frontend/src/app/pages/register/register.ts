@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { Router, RouterModule } from '@angular/router';
+import { environment } from '../../../environments/environment';
 
 @Component({
   standalone: true,
@@ -28,7 +29,7 @@ export class RegisterComponent {
 
   submitting = false;
 
-  constructor(private http: HttpClient, private router: Router) {}
+  constructor(private http: HttpClient, private router: Router) { }
 
   checkPassword() {
     this.passwordValid.minLength = this.password.length >= 8;
@@ -70,7 +71,7 @@ export class RegisterComponent {
     this.submitting = true;
 
     this.http
-      .post('/api/auth/register', {
+      .post(`${environment.apiUrl}/auth/register`, {
         name: this.name.trim(),
         email: this.email.trim(),
         password: this.password,
