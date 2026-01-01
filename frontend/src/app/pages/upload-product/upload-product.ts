@@ -1,8 +1,8 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { ProductService } from '../../services/product.service';
 
 @Component({
   selector: 'app-upload-product',
@@ -30,7 +30,7 @@ export class UploadProduct {
   aiPrediction: any = null;
   productId: number | null = null;
 
-  constructor(private http: HttpClient, private router: Router) { }
+  constructor(private productService: ProductService, private router: Router) { }
 
   // helper to produce today's date in yyyy-MM-dd
   private getTodayString(): string {
@@ -96,7 +96,7 @@ export class UploadProduct {
     formData.append('quantityUnit', this.quantityUnit);
     formData.append('image', this.imageFile);
 
-    this.http.post<any>('/api/products/upload', formData)
+    this.productService.uploadProduct(formData)
       .subscribe({
         next: (res) => {
           this.loading = false;
