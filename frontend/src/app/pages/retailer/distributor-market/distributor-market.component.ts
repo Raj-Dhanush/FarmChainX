@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule, DecimalPipe } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
+import { environment } from '../../../../environments/environment';
 
 @Component({
     selector: 'app-distributor-market',
@@ -22,7 +23,7 @@ export class DistributorMarketComponent implements OnInit {
 
     fetchMarket() {
         this.isLoading = true;
-        this.http.get<any[]>('/api/track/market/distributors').subscribe({
+        this.http.get<any[]>(`${environment.apiUrl}/track/market/distributors`).subscribe({
             next: (data) => {
                 this.marketItems = data;
                 this.isLoading = false;
@@ -44,7 +45,7 @@ export class DistributorMarketComponent implements OnInit {
                 total: item.quantity * item.pricePerUnit
             };
 
-            this.http.post('/api/retailer/orders/create', payload).subscribe({
+            this.http.post(`${environment.apiUrl}/retailer/orders/create`, payload).subscribe({
                 next: (res: any) => {
                     alert(`✅ Order Placed Successfully!\n\nOrder ID: PO-${res.orderId}\nSupplier: ${item.distributor}`);
                     this.purchasingId = null;

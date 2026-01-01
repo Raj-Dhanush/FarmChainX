@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
+import { environment } from '../../../../environments/environment';
 
 interface InventoryItem {
   productId: string;
@@ -31,7 +32,7 @@ export class RetailerInventoryComponent {
   }
 
   fetchInventory() {
-    this.http.get<any[]>('/api/track/retailer/inventory').subscribe({
+    this.http.get<any[]>(`${environment.apiUrl}/track/retailer/inventory`).subscribe({
       next: (data) => {
         this.items = data;
       },
@@ -53,7 +54,7 @@ export class RetailerInventoryComponent {
 
   sell(item: InventoryItem) {
     if (confirm(`Mark 1 unit of ${item.name} as sold?`)) {
-      this.http.post('/api/retailer/sell', { productId: item.productId }).subscribe({
+      this.http.post(`${environment.apiUrl}/retailer/sell`, { productId: item.productId }).subscribe({
         next: () => {
           alert(`✅ Sold 1 unit of ${item.name}. Inventory updated.`);
           this.fetchInventory(); // Refresh list to remove item
