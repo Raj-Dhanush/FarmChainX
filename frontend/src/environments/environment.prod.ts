@@ -1,8 +1,8 @@
 export const environment = {
     production: true,
-    apiUrl: 'https://farmchainx-backend.onrender.com',  // Update with your actual backend URL
+    apiUrl: 'https://farmchainx-backend.onrender.com/api',
 
-    // Optional configurations
+
     enableDebugMode: false,
     enableConsoleLogging: false,
 
