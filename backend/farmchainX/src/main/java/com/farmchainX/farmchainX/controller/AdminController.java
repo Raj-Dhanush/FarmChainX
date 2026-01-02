@@ -7,14 +7,18 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.farmchainX.farmchainX.dto.AdminAnalyticsDTO;
 import com.farmchainX.farmchainX.dto.AdminOverview;
 import com.farmchainX.farmchainX.dto.SystemLogDTO;
+import com.farmchainX.farmchainX.dto.SystemSettingsDTO;
 import com.farmchainX.farmchainX.model.AdminPromotionRequest;
 import com.farmchainX.farmchainX.model.Role;
 import com.farmchainX.farmchainX.model.User;
@@ -158,5 +162,24 @@ public class AdminController {
                             details);
                 })
                 .toList();
+    }
+
+    @GetMapping("/analytics")
+    @PreAuthorize("hasRole('ADMIN')")
+    public AdminAnalyticsDTO getAnalytics() {
+        return overviewService.getAnalytics();
+    }
+
+    @GetMapping("/settings")
+    @PreAuthorize("hasRole('ADMIN')")
+    public SystemSettingsDTO getSettings() {
+        return overviewService.getSystemSettings();
+    }
+
+    @PostMapping("/settings")
+    @PreAuthorize("hasRole('ADMIN')")
+    public SystemSettingsDTO updateSettings(
+            @org.springframework.web.bind.annotation.RequestBody SystemSettingsDTO settings) {
+        return overviewService.updateSystemSettings(settings);
     }
 }
